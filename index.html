@@ -43,6 +43,21 @@
             </div>
         </section>
 
+        <!-- ─── Browse Teams ─────────────────── -->
+        <section class="browse-teams">
+            <div class="team-dropdown-wrap">
+                <select id="team-dropdown" class="team-select">
+                    <option value="">Select a Team...</option>
+                </select>
+            </div>
+        </section>
+
+        <!-- ─── Team Roster (hidden until team selected) ── -->
+        <section id="roster-section" class="roster-section hidden">
+            <h3>Team Roster</h3>
+            <div id="roster-container" class="roster-grid"></div>
+        </section>
+
         <!-- ─── Player Card (hidden until selected) ── -->
         <section id="player-card" class="player-card hidden">
             <div class="player-card-inner">
@@ -77,6 +92,12 @@
                 <span class="example-pill" data-query="LeBron James">🏀 LeBron</span>
                 <span class="example-pill" data-query="Patrick Mahomes">🏈 Mahomes</span>
                 <span class="example-pill" data-query="Juan Soto">⚾ Soto</span>
+            </div>
+
+            <!-- ─── Hot Streaks ──────────────────── -->
+            <div id="hot-props-section" class="hot-props-section">
+                <h3>🔥 Hot Streaks (Last 10 Games)</h3>
+                <div id="hot-props-container" class="hot-props-container"></div>
             </div>
         </div>
 

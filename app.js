@@ -31,8 +31,31 @@ const SPORT_CONFIG = {
     statKeys: ['hits', 'homeRuns', 'RBIs', 'runs', 'walks', 'strikeouts', 'avg', 'OBP', 'sluggingPct', 'atBats'],
     primaryStats: ['H', 'HR', 'RBI', 'AVG'],
     chartStats: ['H', 'HR', 'RBI', 'R'],
-    season: 2025,
+    season: 2024,
   }
+};
+
+const POPULAR_PROPS = {
+  basketball: [
+    { stat: 'PTS', val: 25, label: '25+ Points' },
+    { stat: 'PTS', val: 20, label: '20+ Points' },
+    { stat: 'REB', val: 8, label: '8+ Rebounds' },
+    { stat: 'REB', val: 6, label: '6+ Rebounds' },
+    { stat: 'AST', val: 8, label: '8+ Assists' },
+    { stat: 'AST', val: 6, label: '6+ Assists' }
+  ],
+  football: [
+    { stat: 'YDS', val: 250, label: '250+ Pass Yds' },
+    { stat: 'YDS', val: 200, label: '200+ Pass Yds' },
+    { stat: 'TD', val: 2, label: '2+ Pass TDs' },
+    { stat: 'RYDS', val: 50, label: '50+ Rush Yds' },
+  ],
+  baseball: [
+    { stat: 'H', val: 1, label: '1+ Hits' },
+    { stat: 'H', val: 2, label: '2+ Hits' },
+    { stat: 'HR', val: 1, label: '1+ Home Runs' },
+    { stat: 'R', val: 1, label: '1+ Runs' }
+  ]
 };
 
 // ─── State ──────────────────────────────
@@ -43,6 +66,7 @@ const state = {
   gamelog: [],       // array of { eventData, stats[] }
   opponents: [],     // unique opponents from gamelog
   selectedOpponent: null,
+  customThresholds: {}, // statLabel -> custom number
 };
 
 // ─── DOM Refs ───────────────────────────
@@ -68,6 +92,9 @@ const dom = {
   chartsContainer: document.getElementById('charts-container'),
   gamelogTable: document.getElementById('gamelog-table'),
   errorToast: document.getElementById('error-toast'),
+  teamDropdown: document.getElementById('team-dropdown'),
+  rosterContainer: document.getElementById('roster-container'),
+  rosterSection: document.getElementById('roster-section'),
 };
 
 // ─── Utilities ──────────────────────────
@@ -85,7 +112,13 @@ function showLoading(show) {
 function formatDate(dateStr) {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateShort(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' });
 }
 
 // ─── ESPN API: Search Players ───────────
@@ -144,6 +177,45 @@ async function getGamelog(playerId) {
   } catch (e) {
     console.error('Gamelog failed:', e);
     return null;
+  }
+}
+
+// ─── ESPN API: Get Teams ─────────────────
+async function getTeams() {
+  const cfg = SPORT_CONFIG[state.sport];
+  // Using core v2 API for general team list
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${state.sport}/${cfg.league}/teams`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    // Some ESPN APIs return teams inside sports[0].leagues[0].teams
+    let teams = [];
+    if (data.sports && data.sports[0] && data.sports[0].leagues && data.sports[0].leagues[0] && data.sports[0].leagues[0].teams) {
+      teams = data.sports[0].leagues[0].teams.map(t => t.team);
+    } else if (data.teams) {
+      teams = data.teams.map(t => t.team);
+    }
+    return teams;
+  } catch (e) {
+    console.error('Get teams failed:', e);
+    return [];
+  }
+}
+
+// ─── ESPN API: Get Team Roster ───────────
+async function getTeamRoster(teamId) {
+  const cfg = SPORT_CONFIG[state.sport];
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${state.sport}/${cfg.league}/teams/${teamId}/roster`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.athletes) {
+      return data.athletes;
+    }
+    return [];
+  } catch (e) {
+    console.error('Get roster failed:', e);
+    return [];
   }
 }
 
@@ -322,7 +394,12 @@ function renderCandleCharts(games) {
       return parseFloat(v) || 0;
     });
 
-    const avg = values.length ? values.reduce((s, v) => s + v, 0) / values.length : 0;
+    const calculatedAvg = values.length ? values.reduce((s, v) => s + v, 0) / values.length : 0;
+
+    // Check if the user has defined a custom threshold
+    const hasCustom = state.customThresholds[statLabel] !== undefined;
+    const avg = hasCustom ? state.customThresholds[statLabel] : calculatedAvg;
+
     const max = Math.max(...values, avg * 1.3, 1);
     const chartHeight = 140; // px
 
@@ -334,29 +411,39 @@ function renderCandleCharts(games) {
       const cls = val === 0 ? 'neutral' : (isAbove ? 'above-avg' : 'below-avg');
       const oppAbbr = g.opponent ? g.opponent.abbreviation : '?';
       const dateStr = formatDate(g.date);
+      const labelText = state.selectedOpponent ? formatDateShort(g.date) : oppAbbr;
 
       return `
         <div class="candle-col">
           <div class="candle-tooltip">${val} ${statLabel} vs ${oppAbbr}<br>${dateStr} · ${g.result || '?'}</div>
-          <div class="candle-bar ${cls}" style="height:${barH}px"></div>
-          <div class="candle-label">${oppAbbr}</div>
+          <div class="candle-bar ${cls}" style="height:${barH}px">
+            <span class="candle-value">${val}</span>
+          </div>
+          <div class="candle-label">${labelText}</div>
         </div>
       `;
     }).join('');
 
     // Average line position
-    const avgLineBottom = (avg / max) * chartHeight;
-    const avgDisplay = avg.toFixed(1);
+    // If the average is higher than max (unlikely unless custom is huge), clamp it so it doesn't break the UI
+    const avgLineH = Math.min((avg / max) * chartHeight, chartHeight + 20);
+    const avgDisplay = avg % 1 === 0 ? avg.toString() : avg.toFixed(1);
 
     const filterLabel = state.selectedOpponent ? `vs ${state.selectedOpponent.abbreviation}` : 'Season';
 
     html += `
       <div class="chart-card">
-        <h4>📊 ${statLabel}</h4>
-        <div class="chart-subtitle">${filterLabel} · Avg: ${avgDisplay} · ${chartGames.length} games</div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+          <h4>📊 ${statLabel}</h4>
+          <div class="custom-threshold">
+            <label for="thresh-${statLabel}">Line:</label>
+            <input type="number" id="thresh-${statLabel}" data-stat="${statLabel}" value="${avgDisplay}" step="0.5" />
+          </div>
+        </div>
+        <div class="chart-subtitle">${filterLabel} · ${chartGames.length} games</div>
         <div class="candle-chart" style="height:${chartHeight + 22}px">
-          <div class="avg-line" style="bottom:${avgLineBottom + 22}px">
-            <span class="avg-line-label">AVG ${avgDisplay}</span>
+          <div class="avg-line" style="bottom:${avgLineH + 22}px">
+            <span class="avg-line-label">LINE ${avgDisplay}</span>
           </div>
           ${candles}
         </div>
@@ -365,6 +452,18 @@ function renderCandleCharts(games) {
   });
 
   dom.chartsContainer.innerHTML = html;
+
+  // Bind threshold inputs
+  dom.chartsContainer.querySelectorAll('.custom-threshold input').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const stat = e.target.dataset.stat;
+      const val = parseFloat(e.target.value);
+      if (!isNaN(val)) {
+        state.customThresholds[stat] = val;
+        renderCandleCharts(getFilteredGames()); // Just rerender the charts
+      }
+    });
+  });
 }
 
 // ─── Render Game Log Table ──────────────
@@ -507,6 +606,9 @@ async function selectPlayer(player) {
     <span>🏠 ${player.team || '—'}</span>
   `;
 
+  // Track search in "database" (localStorage)
+  trackPlayerSearch(player);
+
   // Fetch gamelog
   showLoading(true);
   dom.results.classList.add('hidden');
@@ -564,8 +666,10 @@ function clearPlayer() {
   state.gamelog = [];
   state.opponents = [];
   state.selectedOpponent = null;
+  state.customThresholds = {};
 
   dom.playerCard.classList.add('hidden');
+  dom.rosterSection.classList.add('hidden');
   dom.opponentSection.classList.add('hidden');
   dom.results.classList.add('hidden');
   dom.selectedOpponent.classList.add('hidden');
@@ -643,6 +747,8 @@ document.addEventListener('DOMContentLoaded', () => {
       state.sport = btn.dataset.sport;
       // Clear current data
       clearPlayer();
+      loadHotProps();
+      loadTeamsDropdown();
     });
   });
 
@@ -664,4 +770,242 @@ document.addEventListener('DOMContentLoaded', () => {
       dom.searchInput.focus();
     });
   });
+
+  // Load initial data
+  loadHotProps();
+  loadTeamsDropdown();
 });
+
+// ─── Load Teams Dropdown ────────────────
+async function loadTeamsDropdown() {
+  if (!dom.teamDropdown) return;
+
+  dom.teamDropdown.innerHTML = '<option value="">Loading teams...</option>';
+  dom.rosterSection.classList.add('hidden');
+
+  const teams = await getTeams();
+
+  if (!teams.length) {
+    dom.teamDropdown.innerHTML = '<option value="">Failed to load teams</option>';
+    return;
+  }
+
+  // Sort teams alphabetically
+  teams.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  let optionsHtml = '<option value="">Select a Team...</option>';
+  teams.forEach(t => {
+    optionsHtml += `<option value="${t.id}">${t.displayName}</option>`;
+  });
+
+  dom.teamDropdown.innerHTML = optionsHtml;
+}
+
+// ─── Handle Team Selection/Roster ───────
+if (dom.teamDropdown) {
+  dom.teamDropdown.addEventListener('change', async (e) => {
+    const teamId = e.target.value;
+    if (!teamId) {
+      dom.rosterSection.classList.add('hidden');
+      return;
+    }
+
+    dom.rosterSection.classList.remove('hidden');
+    dom.rosterContainer.innerHTML = `<div class="spinner" style="width:24px;height:24px;border-width:2px;margin:20px auto"></div><p style="text-align:center;color:var(--text-muted);font-size:12px">Loading roster...</p>`;
+
+    const roster = await getTeamRoster(teamId);
+
+    if (!roster.length) {
+      dom.rosterContainer.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">Could not load active roster for this team.</p>`;
+      return;
+    }
+
+    const teamName = dom.teamDropdown.options[dom.teamDropdown.selectedIndex].text;
+
+    // Render athletes
+    dom.rosterContainer.innerHTML = roster.map(p => {
+      const headshot = p.headshot?.href || `https://a.espncdn.com/i/headshots/${SPORT_CONFIG[state.sport].league}/players/full/${p.id}.png`;
+      return `
+                <div class="autocomplete-item roster-item" data-id="${p.id}" data-name="${p.fullName}" data-team="${teamName}" data-headshot="${headshot}" data-pos="${p.position?.displayName || ''}">
+                  <img src="${headshot}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%23161b26%22 width=%2240%22 height=%2240%22/><text x=%2220%22 y=%2224%22 text-anchor=%22middle%22 fill=%22%23505a70%22 font-size=%2216%22>?</text></svg>'">
+                  <div class="autocomplete-item-info">
+                    <div class="autocomplete-item-name">${p.fullName}</div>
+                    <div class="autocomplete-item-meta">${p.position?.displayName || ''} ${p.jersey ? '#' + p.jersey : ''}</div>
+                  </div>
+                </div>
+            `;
+    }).join('');
+
+    // Bind clicks
+    dom.rosterContainer.querySelectorAll('.roster-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const player = {
+          id: item.dataset.id,
+          name: item.dataset.name,
+          team: item.dataset.team,
+          headshot: item.dataset.headshot,
+          position: item.dataset.pos
+        };
+        selectPlayer(player);
+        dom.rosterSection.classList.add('hidden'); // hide roster after selecting
+        dom.teamDropdown.value = ""; // reset dropdown
+      });
+    });
+  });
+}
+
+// ─── Mock Database: Track Searches ────────
+function trackPlayerSearch(player) {
+  const sport = state.sport;
+  const key = `sg_searches_${sport}`;
+  let data = JSON.parse(localStorage.getItem(key)) || {};
+
+  if (!data[player.name]) {
+    data[player.name] = { count: 0, headshot: player.headshot, team: player.team };
+  }
+  data[player.name].count++;
+
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+// ─── Get Top Searched Players ─────────────
+function getTopSearchedPlayers(sport, count = 5) {
+  const key = `sg_searches_${sport}`;
+  let data = JSON.parse(localStorage.getItem(key)) || {};
+
+  // Seed with fake search data if empty (to simulate real users)
+  if (Object.keys(data).length < count) {
+    if (sport === 'basketball') {
+      data = {
+        'LeBron James': { count: 1420, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png', team: 'Los Angeles Lakers' },
+        'Nikola Jokic': { count: 1105, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/3112335.png', team: 'Denver Nuggets' },
+        'Luka Doncic': { count: 980, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/3945274.png', team: 'Dallas Mavericks' },
+        'Jayson Tatum': { count: 850, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/4065648.png', team: 'Boston Celtics' },
+        'Shai Gilgeous-Alexander': { count: 720, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/4278073.png', team: 'Oklahoma City Thunder' }
+      };
+    } else if (sport === 'football') {
+      data = {
+        'Patrick Mahomes': { count: 2100, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png', team: 'Kansas City Chiefs' },
+        'Lamar Jackson': { count: 1850, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3924365.png', team: 'Baltimore Ravens' },
+        'Josh Allen': { count: 1620, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3918298.png', team: 'Buffalo Bills' },
+        'Christian McCaffrey': { count: 1400, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3117251.png', team: 'San Francisco 49ers' },
+        'Jalen Hurts': { count: 1150, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4040715.png', team: 'Philadelphia Eagles' }
+      };
+    } else if (sport === 'baseball') {
+      data = {
+        'Shohei Ohtani': { count: 3200, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/39832.png', team: 'Los Angeles Dodgers' },
+        'Aaron Judge': { count: 2450, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/33236.png', team: 'New York Yankees' },
+        'Juan Soto': { count: 1980, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/38908.png', team: 'New York Yankees' },
+        'Bobby Witt Jr.': { count: 1450, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/42403.png', team: 'Kansas City Royals' },
+        'Gunnar Henderson': { count: 1100, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/42401.png', team: 'Baltimore Orioles' }
+      };
+    }
+    localStorage.setItem(key, JSON.stringify(data));
+  }
+
+  // Sort by highest count
+  const sorted = Object.entries(data).map(([name, info]) => ({ name, ...info })).sort((a, b) => b.count - a.count);
+  return sorted.slice(0, count);
+}
+
+// ─── AI Hot Streaks ─────────────────────
+async function loadHotProps() {
+  const container = document.getElementById('hot-props-container');
+  if (!container) return;
+
+  container.innerHTML = `<div class="spinner" style="width:24px;height:24px;border-width:2px;margin:20px auto"></div><p style="text-align:center;color:var(--text-muted);font-size:12px">Analyzing top searched players...</p>`;
+
+  const sport = state.sport;
+  const topPlayers = getTopSearchedPlayers(sport, 5); // Get most requested from "database"
+  const props = POPULAR_PROPS[sport];
+
+  let bestBets = [];
+
+  try {
+    // Fetch data in parallel for the top 5 most searched players
+    const promises = topPlayers.map(async (searchInfo) => {
+      const pList = await searchPlayers(searchInfo.name);
+      if (!pList.length) return null;
+      const p = pList[0];
+      const gamelogRaw = await getGamelog(p.id);
+      if (!gamelogRaw) return null;
+
+      const games = parseGamelog(gamelogRaw).slice(0, 10); // L10 games
+      if (games.length < 5) return null; // not enough data
+
+      let bestProp = null;
+      let highestRate = -1;
+
+      // Find the absolute best hit-rate prop for THIS specific player
+      props.forEach(prop => {
+        let hits = 0;
+        const validGames = games.filter(g => g.stats[prop.stat] !== undefined && g.stats[prop.stat] !== '-');
+        if (validGames.length < 5) return;
+
+        const results = validGames.map(g => {
+          const val = parseFloat(g.stats[prop.stat]) || 0;
+          const hit = val >= prop.val;
+          if (hit) hits++;
+          return hit;
+        });
+
+        const rate = hits / validGames.length;
+        // Prioritize higher strike rate lines (e.g. 100% hits > 80% hits)
+        if (rate > highestRate && rate >= 0.6) {
+          highestRate = rate;
+          bestProp = { ...prop, rate, hits, total: validGames.length, results };
+        }
+      });
+
+      if (bestProp) {
+        return { player: p, prop: bestProp, searchCount: searchInfo.count };
+      }
+      return null;
+    });
+
+    const results = await Promise.all(promises);
+    bestBets = results.filter(r => r !== null).sort((a, b) => b.prop.rate - a.prop.rate);
+
+    if (!bestBets.length) {
+      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No high-confidence trends found today.</p>`;
+      return;
+    }
+
+    // Render the cards
+    container.innerHTML = bestBets.map(bet => {
+      const pct = Math.round(bet.prop.rate * 100);
+
+      // Build tiny L10 history bar
+      const historyHtml = bet.prop.results.reverse().map(hit =>
+        `<div style="width:12px; height:12px; border-radius:2px; background: ${hit ? 'var(--accent-green)' : 'var(--accent-red)'}"></div>`
+      ).join('');
+
+      return `
+        <div class="hot-card" onclick="document.getElementById('player-search').value='${bet.player.name}'; document.getElementById('search-btn').click(); window.scrollTo({top:0, behavior:'smooth'});">
+          <div class="hot-card-left">
+            <div style="position:relative">
+              <img src="${bet.player.headshot || 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png'}" alt="${bet.player.name}">
+              <div style="position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); font-size:9px; background:var(--accent); color:#fff; padding:2px 4px; border-radius:4px; font-weight:800; white-space:nowrap;">🔥 Top Pick</div>
+            </div>
+            <div style="margin-left: 8px;">
+              <div class="hot-player-name">${bet.player.name} <span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:4px;">(${bet.searchCount.toLocaleString()} searches)</span></div>
+              <div class="hot-player-meta">${bet.player.team || 'Pro Player'}</div>
+            </div>
+          </div>
+          <div class="hot-card-right">
+            <div class="hot-prop-label">${bet.prop.label}</div>
+            <div class="hot-prop-history">
+              ${historyHtml}
+              <span class="hot-prop-pct">${pct}%</span>
+            </div>
+            <div class="hot-prop-sub">(${bet.prop.hits}/${bet.prop.total} in L10)</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    console.error('Failed to load hot props', e);
+    container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px">Check back later for automated trends.</p>`;
+  }
+}

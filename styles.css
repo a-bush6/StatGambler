@@ -236,6 +236,108 @@ main {
   color: var(--text-muted);
 }
 
+/* ─── Browse Teams ───────────────────── */
+.browse-teams {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.team-dropdown-wrap {
+  display: inline-block;
+  position: relative;
+}
+
+.team-select {
+  appearance: none;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  color: var(--text-primary);
+  padding: 10px 36px 10px 16px;
+  border-radius: 100px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  min-width: 200px;
+  transition: border-color .2s;
+}
+
+.team-select:hover,
+.team-select:focus {
+  border-color: var(--accent);
+}
+
+.team-dropdown-wrap::after {
+  content: '▼';
+  font-size: 10px;
+  color: var(--text-muted);
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* ─── Roster Section ─────────────────── */
+.roster-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.roster-section.hidden {
+  display: none;
+}
+
+.roster-section h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+
+.roster-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* Custom Scrollbar for Roster */
+.roster-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.roster-grid::-webkit-scrollbar-track {
+  background: var(--bg-surface);
+  border-radius: 10px;
+}
+
+.roster-grid::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: 10px;
+}
+
+.roster-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: all .2s;
+}
+
+.roster-item:hover {
+  border-color: var(--accent);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
 /* ─── Player Card ────────────────────── */
 .player-card {
   margin-bottom: 20px;
@@ -451,6 +553,106 @@ main {
   background: var(--accent-dim);
 }
 
+/* ─── Hot Streaks ────────────────────── */
+.hot-props-section {
+  margin-top: 40px;
+  text-align: left;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hot-props-section h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.hot-props-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hot-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.hot-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.hot-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hot-card-left img {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background: var(--bg-surface);
+  object-fit: cover;
+}
+
+.hot-player-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.hot-player-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.hot-card-right {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hot-prop-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.hot-prop-history {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.hot-prop-pct {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--accent-green);
+  margin-left: 8px;
+}
+
+.hot-prop-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
 /* ─── Loading ────────────────────────── */
 .loading-overlay {
   display: none;
@@ -539,10 +741,45 @@ main {
 .chart-card h4 {
   font-size: 14px;
   font-weight: 700;
-  margin-bottom: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.custom-threshold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 100px;
+}
+
+.custom-threshold label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.custom-threshold input {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-weight: 800;
+  font-size: 12px;
+  width: 40px;
+  outline: none;
+  font-family: inherit;
+  text-align: right;
+}
+
+.custom-threshold input::-webkit-outer-spin-button,
+.custom-threshold input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .chart-subtitle {
@@ -596,6 +833,18 @@ main {
   position: relative;
   cursor: pointer;
   min-height: 4px;
+  display: flex;
+  justify-content: center;
+}
+
+.candle-value {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
 .candle-bar:hover {
