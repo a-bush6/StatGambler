@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StatGambler — Player Analytics</title>
+    <meta name="description" content="Player performance analytics with candlestick charts for smarter sports bets">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <!-- ─── Header ─────────────────────────── -->
+    <header>
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">📊</span>
+                <h1>Stat<span class="accent">Gambler</span></h1>
+            </div>
+            <div class="header-tag">Player Analytics Engine</div>
+        </div>
+    </header>
+
+    <main>
+        <!-- ─── Sport Selector ───────────────── -->
+        <section class="sport-bar">
+            <button class="sport-btn active" data-sport="basketball" data-league="nba">🏀 NBA</button>
+            <button class="sport-btn" data-sport="football" data-league="nfl">🏈 NFL</button>
+            <button class="sport-btn" data-sport="baseball" data-league="mlb">⚾ MLB</button>
+        </section>
+
+        <!-- ─── Search Section ───────────────── -->
+        <section class="search-section">
+            <div class="search-box">
+                <input type="text" id="player-search" placeholder="Search a player… (e.g. LeBron, Mahomes, Soto)"
+                    autocomplete="off">
+                <button id="search-btn" class="search-icon" aria-label="Search">🔍</button>
+                <div id="player-dropdown" class="autocomplete-results"></div>
+            </div>
+        </section>
+
+        <!-- ─── Player Card (hidden until selected) ── -->
+        <section id="player-card" class="player-card hidden">
+            <div class="player-card-inner">
+                <img id="player-headshot" src="" alt="" class="headshot">
+                <div class="player-info">
+                    <h2 id="player-name"></h2>
+                    <div id="player-meta" class="player-meta"></div>
+                </div>
+                <button id="clear-player" class="clear-btn" title="Clear">✕</button>
+            </div>
+        </section>
+
+        <!-- ─── Opponent Selector ────────────── -->
+        <section id="opponent-section" class="opponent-section hidden">
+            <h3>Select Opponent</h3>
+            <p class="section-hint">Pick a team to see how this player performs against them</p>
+            <div id="opponent-grid" class="opponent-grid"></div>
+            <div id="selected-opponent" class="selected-opponent hidden">
+                <span id="opp-logo-wrap"></span>
+                <span id="opp-name-text"></span>
+                <button id="clear-opponent" class="clear-opp-btn">✕</button>
+            </div>
+        </section>
+
+        <!-- ─── Intro (shown before any player is searched) ── -->
+        <div id="intro-section" class="intro-section">
+            <div class="intro-icon">🎯</div>
+            <h2>Search Any Player</h2>
+            <p>Pick a sport above, then search for a player to see their game-by-game stats visualized as candlestick
+                charts.</p>
+            <div class="example-row">
+                <span class="example-pill" data-query="LeBron James">🏀 LeBron</span>
+                <span class="example-pill" data-query="Patrick Mahomes">🏈 Mahomes</span>
+                <span class="example-pill" data-query="Juan Soto">⚾ Soto</span>
+            </div>
+        </div>
+
+        <!-- ─── Loading Overlay ──────────────── -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <div class="loading-text">Loading player data…</div>
+        </div>
+
+        <!-- ─── Results Section ──────────────── -->
+        <section id="results-section" class="results-section hidden">
+            <!-- Averages Summary Bar -->
+            <div id="averages-bar" class="averages-bar"></div>
+
+            <!-- Candlestick Charts -->
+            <div id="charts-container" class="charts-container"></div>
+
+            <!-- Game Log Table -->
+            <div id="gamelog-table" class="gamelog-section"></div>
+        </section>
+    </main>
+
+    <!-- ─── Error Toast ────────────────────── -->
+    <div id="error-toast" class="error-toast"></div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
