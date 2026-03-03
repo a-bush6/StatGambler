@@ -94,6 +94,18 @@
                 <span class="example-pill" data-query="Juan Soto">⚾ Soto</span>
             </div>
 
+            <!-- ─── Daily Parlay ──────────────────── -->
+            <div id="daily-parlay-section" class="daily-parlay-section">
+                <h3>🔥 AI Parlay Builder (Today's Matchups)</h3>
+                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 16px;">
+                    We scanned today's schedule to find the top 3 player milestones based on their historical hit rates
+                    against their scheduled opponents.
+                </p>
+                <div id="daily-parlay-container" class="daily-parlay-container"></div>
+            </div>
+
+
+
             <!-- ─── Hot Streaks ──────────────────── -->
             <div id="hot-props-section" class="hot-props-section">
                 <h3>🔥 Hot Streaks (Last 10 Games)</h3>
@@ -110,7 +122,20 @@
         <!-- ─── Results Section ──────────────── -->
         <section id="results-section" class="results-section hidden">
             <!-- Averages Summary Bar -->
-            <div id="averages-bar" class="averages-bar"></div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div id="averages-bar" class="averages-bar" style="flex: 1; margin-bottom: 0;"></div>
+
+                <div id="game-count-container" style="margin-left: 16px;">
+                    <select id="game-count-dropdown" class="team-select"
+                        style="min-width: 120px; padding: 6px 14px; font-size: 12px;">
+                        <option value="5">Last 5 Games</option>
+                        <option value="10">Last 10 Games</option>
+                        <option value="15">Last 15 Games</option>
+                        <option value="20" selected>Last 20 Games</option>
+                    </select>
+                </div>
+            </div>
 
             <!-- Candlestick Charts -->
             <div id="charts-container" class="charts-container"></div>

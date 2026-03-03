@@ -167,17 +167,49 @@ async function getPlayerDetails(playerId) {
 }
 
 // ─── ESPN API: Get Gamelog ───────────────
-async function getGamelog(playerId) {
+async function getGamelog(playerId, fetchOpponentId = null) {
   const cfg = SPORT_CONFIG[state.sport];
-  const url = `${ESPN_SITE}/${state.sport}/${cfg.league}/athletes/${playerId}/gamelog?season=${cfg.season}&seasontype=2`;
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    return data;
-  } catch (e) {
-    console.error('Gamelog failed:', e);
-    return null;
+  let allData = null;
+  let gamesVsOpp = 0;
+
+  // We loop backward up to 5 years if needed to hit the 5-game minimum
+  for (let i = 0; i < 6; i++) {
+    const s = cfg.season - i;
+    const url = `${ESPN_SITE}/${state.sport}/${cfg.league}/athletes/${playerId}/gamelog?season=${s}&seasontype=2`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (!allData) {
+        allData = data;
+      } else if (data && data.events) {
+        // Merge the event dictionary
+        allData.events = { ...allData.events, ...data.events };
+        // Cleanly append the new year's season categories
+        if (data.seasonTypes) {
+          allData.seasonTypes.push(...data.seasonTypes);
+        }
+      }
+
+      // Count how many opponent games we've amassed
+      if (fetchOpponentId && data && data.events) {
+        Object.values(data.events).forEach(ev => {
+          if (ev.opponent && String(ev.opponent.id) === String(fetchOpponentId)) {
+            gamesVsOpp++;
+          }
+        });
+      }
+
+      // Stop fetching older years if we aren't filtering, or we have enough games
+      if (!fetchOpponentId || gamesVsOpp >= 5) {
+        break;
+      }
+    } catch (e) {
+      console.error(`Gamelog failed for season ${s}:`, e);
+    }
   }
+
+  return allData;
 }
 
 // ─── ESPN API: Get Teams ─────────────────
@@ -290,9 +322,20 @@ function extractOpponents(games) {
 }
 
 // ─── Filter games by opponent ───────────
-function getFilteredGames() {
-  if (!state.selectedOpponent) return state.gamelog;
-  return state.gamelog.filter(g => g.opponent && g.opponent.id === state.selectedOpponent.id);
+function getFilteredAndSlicedGames() {
+  let games = state.gamelog;
+
+  // If an opponent is selected, find all historical games vs that opponent 
+  // (which already includes last year's data) and show exactly the last 5.
+  if (state.selectedOpponent) {
+    const oppGames = state.gamelog.filter(g => g.opponent && String(g.opponent.id) === String(state.selectedOpponent.id));
+    return oppGames.slice(0, 5);
+  }
+
+  // Otherwise, respect the Game Count dropdown for the player's general recent games
+  const dropdown = document.getElementById('game-count-dropdown');
+  const limit = dropdown ? parseInt(dropdown.value, 10) : 20;
+  return games.slice(0, limit);
 }
 
 // ─── Compute averages ──────────────────
@@ -377,7 +420,7 @@ function renderAveragesBar(games) {
 // ─── Render Candlestick Charts ──────────
 function renderCandleCharts(games) {
   const cfg = SPORT_CONFIG[state.sport];
-  const chartGames = games.slice(0, 20).reverse(); // oldest→newest, max 20
+  const chartGames = [...games].reverse(); // oldest→newest
 
   if (!chartGames.length) {
     dom.chartsContainer.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:40px">No games to chart.</p>';
@@ -460,7 +503,7 @@ function renderCandleCharts(games) {
       const val = parseFloat(e.target.value);
       if (!isNaN(val)) {
         state.customThresholds[stat] = val;
-        renderCandleCharts(getFilteredGames()); // Just rerender the charts
+        renderCandleCharts(getFilteredAndSlicedGames()); // Just rerender the charts
       }
     });
   });
@@ -473,7 +516,7 @@ function renderGamelogTable(games) {
 
   const headerCells = cols.map(c => `<th>${c}</th>`).join('');
 
-  const rows = games.slice(0, 25).map(g => {
+  const rows = games.map(g => {
     const resultClass = g.result === 'W' ? 'result-w' : 'result-l';
     const oppLogo = g.opponent?.logo || '';
     const oppName = g.opponent?.abbreviation || '?';
@@ -521,7 +564,13 @@ function renderGamelogTable(games) {
 
 // ─── Render all results ─────────────────
 function renderResults() {
-  const games = getFilteredGames();
+  const games = getFilteredAndSlicedGames();
+
+  // Toggle the Game Count Dropdown container's visibility
+  const countContainer = document.getElementById('game-count-container');
+  if (countContainer) {
+    countContainer.style.display = state.selectedOpponent ? 'none' : 'block';
+  }
 
   if (!games.length && state.selectedOpponent) {
     dom.averagesBar.innerHTML = `<div class="avg-card" style="grid-column:1/-1"><div class="avg-value" style="font-size:16px;color:var(--text-muted)">No games found vs ${state.selectedOpponent.name}</div></div>`;
@@ -566,7 +615,7 @@ function renderOpponentPicker() {
 }
 
 // ─── Select opponent ────────────────────
-function selectOpponent(opp) {
+async function selectOpponent(opp) {
   state.selectedOpponent = opp;
 
   // Update selected indicator
@@ -579,14 +628,39 @@ function selectOpponent(opp) {
     btn.classList.toggle('active', btn.dataset.oppId === opp.id);
   });
 
+  // Fetch historical seasons until we bag 5 games
+  showLoading(true);
+  dom.results.classList.add('hidden');
+  const rawGamelog = await getGamelog(state.player.id, opp.id);
+  if (rawGamelog) {
+    state.gamelog = parseGamelog(rawGamelog);
+  }
+  showLoading(false);
+  dom.results.classList.remove('hidden');
+
   renderResults();
 }
 
 // ─── Clear opponent filter ──────────────
-function clearOpponent() {
+async function clearOpponent() {
   state.selectedOpponent = null;
   dom.selectedOpponent.classList.add('hidden');
   dom.opponentGrid.querySelectorAll('.opp-btn').forEach(btn => btn.classList.remove('active'));
+
+  // reset dropdown
+  const dropdown = document.getElementById('game-count-dropdown');
+  if (dropdown) dropdown.value = "20";
+
+  // Re-fetch only this year
+  showLoading(true);
+  dom.results.classList.add('hidden');
+  const rawGamelog = await getGamelog(state.player.id, null);
+  if (rawGamelog) {
+    state.gamelog = parseGamelog(rawGamelog);
+  }
+  showLoading(false);
+  dom.results.classList.remove('hidden');
+
   renderResults();
 }
 
@@ -739,6 +813,16 @@ document.addEventListener('DOMContentLoaded', () => {
   dom.clearPlayer.addEventListener('click', clearPlayer);
   dom.clearOpponent.addEventListener('click', clearOpponent);
 
+  // Game count dropdown listener
+  const gameCountDropdown = document.getElementById('game-count-dropdown');
+  if (gameCountDropdown) {
+    gameCountDropdown.addEventListener('change', () => {
+      if (state.player) {
+        renderResults();
+      }
+    });
+  }
+
   // Sport selector
   document.querySelectorAll('.sport-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -748,6 +832,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Clear current data
       clearPlayer();
       loadHotProps();
+      if (typeof loadDailyParlays === 'function') loadDailyParlays();
       loadTeamsDropdown();
     });
   });
@@ -773,6 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load initial data
   loadHotProps();
+  if (typeof loadDailyParlays === 'function') loadDailyParlays();
   loadTeamsDropdown();
 });
 
@@ -1006,6 +1092,283 @@ async function loadHotProps() {
 
   } catch (e) {
     console.error('Failed to load hot props', e);
+    container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px">Check back later for automated trends.</p>`;
+  }
+}
+
+// ─── Mock Database: Track Searches ────────
+function trackPlayerSearch(player) {
+  const sport = state.sport;
+  const key = `sg_searches_${sport}`;
+  let data = JSON.parse(localStorage.getItem(key)) || {};
+
+  if (!data[player.name]) {
+    data[player.name] = { count: 0, headshot: player.headshot, team: player.team };
+  }
+  data[player.name].count++;
+
+  localStorage.setItem(key, JSON.stringify(data));
+}
+
+// ─── Get Top Searched Players ─────────────
+function getTopSearchedPlayers(sport, count = 5) {
+  const key = `sg_searches_${sport}`;
+  let data = JSON.parse(localStorage.getItem(key)) || {};
+
+  if (Object.keys(data).length < count) {
+    if (sport === 'basketball') {
+      data = {
+        'LeBron James': { count: 1420, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png', team: 'Los Angeles Lakers' },
+        'Nikola Jokic': { count: 1105, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/3112335.png', team: 'Denver Nuggets' },
+        'Luka Doncic': { count: 980, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/3945274.png', team: 'Dallas Mavericks' },
+        'Jayson Tatum': { count: 850, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/4065648.png', team: 'Boston Celtics' },
+        'Shai Gilgeous-Alexander': { count: 720, headshot: 'https://a.espncdn.com/i/headshots/nba/players/full/4278073.png', team: 'Oklahoma City Thunder' }
+      };
+    } else if (sport === 'football') {
+      data = {
+        'Patrick Mahomes': { count: 2100, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png', team: 'Kansas City Chiefs' },
+        'Lamar Jackson': { count: 1850, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3924365.png', team: 'Baltimore Ravens' },
+        'Josh Allen': { count: 1620, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3918298.png', team: 'Buffalo Bills' },
+        'Christian McCaffrey': { count: 1400, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/3117251.png', team: 'San Francisco 49ers' },
+        'Jalen Hurts': { count: 1150, headshot: 'https://a.espncdn.com/i/headshots/nfl/players/full/4040715.png', team: 'Philadelphia Eagles' }
+      };
+    } else if (sport === 'baseball') {
+      data = {
+        'Shohei Ohtani': { count: 3200, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/39832.png', team: 'Los Angeles Dodgers' },
+        'Aaron Judge': { count: 2450, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/33236.png', team: 'New York Yankees' },
+        'Juan Soto': { count: 1980, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/38908.png', team: 'New York Yankees' },
+        'Bobby Witt Jr.': { count: 1450, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/42403.png', team: 'Kansas City Royals' },
+        'Gunnar Henderson': { count: 1100, headshot: 'https://a.espncdn.com/i/headshots/mlb/players/full/42401.png', team: 'Baltimore Orioles' }
+      };
+    }
+    localStorage.setItem(key, JSON.stringify(data));
+  }
+
+  const sorted = Object.entries(data).map(([name, info]) => ({ name, ...info })).sort((a, b) => b.count - a.count);
+  return sorted.slice(0, count);
+}
+
+// ─── AI Hot Streaks ─────────────────────
+async function loadHotProps() {
+  const container = document.getElementById('hot-props-container');
+  if (!container) return;
+
+  container.innerHTML = `<div class="spinner" style="width:24px;height:24px;border-width:2px;margin:20px auto"></div><p style="text-align:center;color:var(--text-muted);font-size:12px">Analyzing top searched players...</p>`;
+
+  const sport = state.sport;
+  const topPlayers = getTopSearchedPlayers(sport, 5); // Get most requested from "database"
+  const props = POPULAR_PROPS[sport];
+
+  let bestBets = [];
+
+  try {
+    // Fetch data in parallel for the top 5 most searched players
+    const promises = topPlayers.map(async (searchInfo) => {
+      const pList = await searchPlayers(searchInfo.name);
+      if (!pList.length) return null;
+      const p = pList[0];
+      const gamelogRaw = await getGamelog(p.id);
+      if (!gamelogRaw) return null;
+
+      const games = parseGamelog(gamelogRaw).slice(0, 10); // L10 games
+      if (games.length < 5) return null; // not enough data
+
+      let bestProp = null;
+      let highestRate = -1;
+
+      // Find the absolute best hit-rate prop for THIS specific player
+      props.forEach(prop => {
+        let hits = 0;
+        const validGames = games.filter(g => g.stats[prop.stat] !== undefined && g.stats[prop.stat] !== '-');
+        if (validGames.length < 5) return;
+
+        const results = validGames.map(g => {
+          const val = parseFloat(g.stats[prop.stat]) || 0;
+          const hit = val >= prop.val;
+          if (hit) hits++;
+          return hit;
+        });
+
+        const rate = hits / validGames.length;
+        // Prioritize higher strike rate lines (e.g. 100% hits > 80% hits)
+        if (rate > highestRate && rate >= 0.6) {
+          highestRate = rate;
+          bestProp = { ...prop, rate, hits, total: validGames.length, results };
+        }
+      });
+
+      if (bestProp) {
+        return { player: p, prop: bestProp, searchCount: searchInfo.count };
+      }
+      return null;
+    });
+
+    const results = await Promise.all(promises);
+    bestBets = results.filter(r => r !== null).sort((a, b) => b.prop.rate - a.prop.rate);
+
+    if (!bestBets.length) {
+      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No high-confidence trends found today.</p>`;
+      return;
+    }
+
+    // Render the cards
+    container.innerHTML = bestBets.map(bet => {
+      const pct = Math.round(bet.prop.rate * 100);
+
+      // Build tiny L10 history bar
+      const historyHtml = bet.prop.results.reverse().map(hit =>
+        `<div style="width:12px; height:12px; border-radius:2px; background: ${hit ? 'var(--accent-green)' : 'var(--accent-red)'}"></div>`
+      ).join('');
+
+      return `
+        <div class="hot-card" onclick="document.getElementById('player-search').value='${bet.player.name}'; document.getElementById('search-btn').click(); window.scrollTo({top:0, behavior:'smooth'});">
+          <div class="hot-card-left">
+            <div style="position:relative">
+              <img src="${bet.player.headshot || 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png'}" alt="${bet.player.name}">
+              <div style="position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); font-size:9px; background:var(--accent); color:#fff; padding:2px 4px; border-radius:4px; font-weight:800; white-space:nowrap;">🔥 Top Pick</div>
+            </div>
+            <div style="margin-left: 8px;">
+              <div class="hot-player-name">${bet.player.name} <span style="font-size:10px;color:var(--text-muted);font-weight:400;margin-left:4px;">(${bet.searchCount.toLocaleString()} searches)</span></div>
+              <div class="hot-player-meta">${bet.player.team || 'Pro Player'}</div>
+            </div>
+          </div>
+          <div class="hot-card-right">
+            <div class="hot-prop-label">${bet.prop.label}</div>
+            <div class="hot-prop-history">
+              ${historyHtml}
+              <span class="hot-prop-pct">${pct}%</span>
+            </div>
+            <div class="hot-prop-sub">(${bet.prop.hits}/${bet.prop.total} in L10)</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    console.error('Failed to load hot props', e);
+    container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px">Check back later for automated trends.</p>`;
+  }
+}
+// ─── AI Daily Parlay Builder ─────────────────────
+async function loadDailyParlays() {
+  const container = document.getElementById('daily-parlay-container');
+  if (!container) return;
+
+  container.innerHTML = `<div class="spinner" style="width:24px;height:24px;border-width:2px;margin:20px auto"></div><p style="text-align:center;color:var(--text-muted);font-size:12px">Analyzing today's matchups and historical hit rates...</p>`;
+
+  const cfg = SPORT_CONFIG[state.sport];
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${state.sport}/${cfg.league}/scoreboard`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.events || data.events.length === 0) {
+      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No games scheduled today.</p>`;
+      return;
+    }
+
+    // Get up to 5 matchups to keep API requests reasonable
+    const matchups = data.events.slice(0, 5).map(e => {
+      const comp = e.competitions[0];
+      return {
+        home: comp.competitors.find(c => c.homeAway === 'home').team,
+        away: comp.competitors.find(c => c.homeAway === 'away').team
+      };
+    });
+
+    let candidateBets = [];
+    const props = POPULAR_PROPS[state.sport];
+
+    // Analyze top players from each team to keep requests low
+    const promises = matchups.flatMap(match => {
+      return [
+        { teamId: match.home.id, opponentId: match.away.id, opponentName: match.away.displayName, opponentLogo: match.away.logo },
+        { teamId: match.away.id, opponentId: match.home.id, opponentName: match.home.displayName, opponentLogo: match.home.logo }
+      ].map(async (side) => {
+        let roster = await getTeamRoster(side.teamId);
+        if (!roster || roster.length === 0) return null;
+
+        // Just grab the first active player on the roster who matches a trend (up to 3 tries per team)
+        for (let i = 0; i < Math.min(3, roster.length); i++) {
+          const p = roster[i];
+          if (!p || !p.id) continue;
+
+          const rawLog = await getGamelog(p.id, side.opponentId); // Fetch current + historical until 5 games found
+          if (!rawLog) continue;
+
+          const allGames = parseGamelog(rawLog);
+          // Filter specifically to games against tonight's opponent
+          const vsOpponent = allGames.filter(g => g.opponent && g.opponent.id === side.opponentId);
+          if (vsOpponent.length < 3) continue; // Need at least 3 games against them for a trend
+
+          let bestProp = null;
+          let highestRate = -1;
+
+          props.forEach(prop => {
+            let hits = 0;
+            const validGames = vsOpponent.filter(g => g.stats[prop.stat] !== undefined && g.stats[prop.stat] !== '-');
+            if (validGames.length < 3) return;
+
+            const results = validGames.map(g => {
+              const val = parseFloat(g.stats[prop.stat]) || 0;
+              const hit = val >= prop.val;
+              if (hit) hits++;
+              return hit;
+            });
+
+            const rate = hits / validGames.length;
+            if (rate > highestRate && rate >= 0.6) {
+              highestRate = rate;
+              bestProp = { ...prop, rate, hits, total: validGames.length, results };
+            }
+          });
+
+          if (bestProp) {
+            return { player: p, prop: bestProp, matchup: `vs ${side.opponentName}`, oppId: side.opponentId };
+          }
+        }
+        return null;
+      });
+    });
+
+    const results = await Promise.all(promises);
+    candidateBets = results.filter(r => r !== null).sort((a, b) => b.prop.rate - a.prop.rate);
+
+    // Take top 3 for the parlay
+    const bestBets = candidateBets.slice(0, 3);
+
+    if (!bestBets.length) {
+      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No high-confidence historical trends found for today's matchups.</p>`;
+      return;
+    }
+
+    container.innerHTML = bestBets.map(bet => {
+      const pct = Math.round(bet.prop.rate * 100);
+      return `
+        <div class="parlay-card" onclick="document.getElementById('player-search').value='${bet.player.fullName || bet.player.displayName}'; document.getElementById('search-btn').click(); window.scrollTo({top:0, behavior:'smooth'});">
+          <div class="parlay-card-header">
+            <img class="parlay-card-headshot" src="${bet.player.headshot?.href || 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png'}" alt="${bet.player.displayName}">
+            <div class="parlay-card-info">
+              <div class="parlay-player-name">${bet.player.displayName}</div>
+              <div class="parlay-matchup">${bet.matchup}</div>
+            </div>
+            <div class="parlay-hit-rate">✓ ${pct}%</div>
+          </div>
+          <div class="parlay-prop-box">
+            <div class="parlay-prop-label">${bet.prop.label}</div>
+            <div class="parlay-prop-value">${bet.prop.val}+</div>
+          </div>
+          <div class="parlay-footer">
+            <div class="parlay-odds">Top Trend</div>
+            <div style="font-size: 11px; color: var(--text-muted);">${bet.prop.hits}/${bet.prop.total} times</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  } catch (e) {
+    console.error('Failed to load daily parlays', e);
     container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px">Check back later for automated trends.</p>`;
   }
 }

@@ -600,12 +600,25 @@ main {
 }
 
 .hot-card-left img {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   border: 1.5px solid var(--accent);
   background: var(--bg-surface);
   object-fit: cover;
+}
+
+/* ─── Daily Parlay Component ───────────── */
+.parlay-card-headshot {
+  width: 100px;
+  /* <-- Change this to adjust the headshot width */
+  height: 100px;
+  /* <-- Change this to adjust the headshot height */
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background: var(--bg-surface);
+  object-fit: cover;
+  margin-right: 12px;
 }
 
 .hot-player-name {
