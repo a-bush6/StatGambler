@@ -28,7 +28,7 @@ const SPORT_CONFIG = {
   baseball: {
     league: 'mlb',
     statLabels: ['H', 'HR', 'RBI', 'R', 'BB', 'SO', 'AVG', 'OBP', 'SLG', 'AB'],
-    statKeys: ['hits', 'homeRuns', 'RBIs', 'runs', 'walks', 'strikeouts', 'avg', 'OBP', 'sluggingPct', 'atBats'],
+    statKeys: ['hits', 'homeRuns', 'RBIs', 'runs', 'walks', 'strikeouts', 'avg', 'onBasePct', 'slugAvg', 'atBats'],
     primaryStats: ['H', 'HR', 'RBI', 'AVG'],
     chartStats: ['H', 'HR', 'RBI', 'R'],
     season: 2024,
@@ -52,16 +52,39 @@ const POPULAR_PROPS = {
     { stat: 'AST', val: 4, label: '4+ Assists' }
   ],
   football: [
+    { stat: 'YDS', val: 300, label: '300+ Pass Yds' },
     { stat: 'YDS', val: 250, label: '250+ Pass Yds' },
+    { stat: 'YDS', val: 225, label: '225+ Pass Yds' },
     { stat: 'YDS', val: 200, label: '200+ Pass Yds' },
+    { stat: 'TD', val: 3, label: '3+ Pass TDs' },
     { stat: 'TD', val: 2, label: '2+ Pass TDs' },
+    { stat: 'TD', val: 1, label: '1+ Pass TDs' },
+    { stat: 'RYDS', val: 100, label: '100+ Rush Yds' },
+    { stat: 'RYDS', val: 75, label: '75+ Rush Yds' },
     { stat: 'RYDS', val: 50, label: '50+ Rush Yds' },
+    { stat: 'RYDS', val: 25, label: '25+ Rush Yds' },
+    { stat: 'RTD', val: 2, label: '2+ Rush TDs' },
+    { stat: 'RTD', val: 1, label: '1+ Rush TDs' },
+    { stat: 'CMP', val: 25, label: '25+ Completions' },
+    { stat: 'CMP', val: 20, label: '20+ Completions' },
+    { stat: 'CMP', val: 15, label: '15+ Completions' }
   ],
   baseball: [
-    { stat: 'H', val: 1, label: '1+ Hits' },
+    { stat: 'H', val: 3, label: '3+ Hits' },
     { stat: 'H', val: 2, label: '2+ Hits' },
+    { stat: 'H', val: 1, label: '1+ Hits' },
+    { stat: 'HR', val: 2, label: '2+ Home Runs' },
     { stat: 'HR', val: 1, label: '1+ Home Runs' },
-    { stat: 'R', val: 1, label: '1+ Runs' }
+    { stat: 'RBI', val: 3, label: '3+ RBIs' },
+    { stat: 'RBI', val: 2, label: '2+ RBIs' },
+    { stat: 'RBI', val: 1, label: '1+ RBIs' },
+    { stat: 'R', val: 3, label: '3+ Runs' },
+    { stat: 'R', val: 2, label: '2+ Runs' },
+    { stat: 'R', val: 1, label: '1+ Runs' },
+    { stat: 'SO', val: 10, label: '10+ Strikeouts' },
+    { stat: 'SO', val: 8, label: '8+ Strikeouts' },
+    { stat: 'SO', val: 6, label: '6+ Strikeouts' },
+    { stat: 'SO', val: 4, label: '4+ Strikeouts' }
   ]
 };
 
@@ -288,8 +311,21 @@ function parseGamelog(rawGamelog) {
 
       // Build a stat object keyed by label
       const statObj = {};
-      labels.forEach((label, i) => {
+      const catLabels = cat.labels || labels;
+      const catNames = cat.names || names;
+      const cfg = SPORT_CONFIG[state.sport];
+
+      catLabels.forEach((label, i) => {
         statObj[label] = statsArr[i] || '0';
+        if (catNames && catNames[i]) {
+          statObj[catNames[i]] = statsArr[i] || '0';
+          if (cfg.statKeys && cfg.statLabels) {
+            const mapIdx = cfg.statKeys.indexOf(catNames[i]);
+            if (mapIdx !== -1) {
+              statObj[cfg.statLabels[mapIdx]] = statsArr[i] || '0';
+            }
+          }
+        }
       });
 
       games.push({
@@ -1239,7 +1275,7 @@ async function loadHotProps() {
         <div class="hot-card" onclick="document.getElementById('player-search').value='${bet.player.name}'; document.getElementById('search-btn').click(); window.scrollTo({top:0, behavior:'smooth'});">
           <div class="hot-card-left">
             <div style="position:relative">
-              <img src="${bet.player.headshot || 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png'}" alt="${bet.player.name}">
+              <img src="${bet.player.headshot || `https://a.espncdn.com/i/headshots/${SPORT_CONFIG[state.sport].league}/players/full/${bet.player.id}.png`}" alt="${bet.player.name}" onerror="this.src='https://a.espncdn.com/i/headshots/nba/players/full/1966.png'">
               <div style="position:absolute; bottom:-6px; left:50%; transform:translateX(-50%); font-size:9px; background:var(--accent); color:#fff; padding:2px 4px; border-radius:4px; font-weight:800; white-space:nowrap;">🔥 Top Pick</div>
             </div>
             <div style="margin-left: 8px;">
@@ -1424,7 +1460,7 @@ async function loadDailyParlays() {
         return `
           <div class="parlay-card" onclick="document.getElementById('player-search').value='${bet.player.fullName || bet.player.displayName}'; document.getElementById('search-btn').click(); window.scrollTo({top:0, behavior:'smooth'});">
             <div class="parlay-card-header">
-              <img class="parlay-card-headshot" src="${bet.player.headshot?.href || 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png'}" alt="${bet.player.displayName}">
+              <img class="parlay-card-headshot" src="${bet.player.headshot?.href || `https://a.espncdn.com/i/headshots/${SPORT_CONFIG[state.sport].league}/players/full/${bet.player.id}.png`}" alt="${bet.player.displayName}" onerror="this.src='https://a.espncdn.com/i/headshots/nba/players/full/1966.png'">
               <div class="parlay-card-info">
                 <div class="parlay-player-name">${bet.player.displayName}</div>
                 <div class="parlay-matchup">${bet.matchup}</div>
