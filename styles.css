@@ -609,6 +609,13 @@ main {
 }
 
 /* ─── Daily Parlay Component ───────────── */
+.daily-parlay-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
 .parlay-card-headshot {
   width: 100px;
   /* <-- Change this to adjust the headshot width */
@@ -1003,6 +1010,10 @@ main {
 /* ─── Responsive ─────────────────────── */
 @media (max-width: 768px) {
   .charts-container {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-parlay-container {
     grid-template-columns: 1fr;
   }
 

@@ -37,12 +37,19 @@ const SPORT_CONFIG = {
 
 const POPULAR_PROPS = {
   basketball: [
+    { stat: 'PTS', val: 30, label: '30+ Points' },
     { stat: 'PTS', val: 25, label: '25+ Points' },
     { stat: 'PTS', val: 20, label: '20+ Points' },
+    { stat: 'PTS', val: 15, label: '15+ Points' },
+    { stat: 'PTS', val: 10, label: '10+ Points' },
+    { stat: 'REB', val: 10, label: '10+ Rebounds' },
     { stat: 'REB', val: 8, label: '8+ Rebounds' },
     { stat: 'REB', val: 6, label: '6+ Rebounds' },
+    { stat: 'REB', val: 4, label: '4+ Rebounds' },
+    { stat: 'AST', val: 10, label: '10+ Assists' },
     { stat: 'AST', val: 8, label: '8+ Assists' },
-    { stat: 'AST', val: 6, label: '6+ Assists' }
+    { stat: 'AST', val: 6, label: '6+ Assists' },
+    { stat: 'AST', val: 4, label: '4+ Assists' }
   ],
   football: [
     { stat: 'YDS', val: 250, label: '250+ Pass Yds' },
@@ -1289,6 +1296,7 @@ async function loadDailyParlays() {
         let roster = await getTeamRoster(side.teamId);
         if (!roster || roster.length === 0) return null;
 
+        let sideBets = [];
         // Just grab the first active player on the roster who matches a trend (up to 3 tries per team)
         for (let i = 0; i < Math.min(3, roster.length); i++) {
           const p = roster[i];
@@ -1299,16 +1307,15 @@ async function loadDailyParlays() {
 
           const allGames = parseGamelog(rawLog);
           // Filter specifically to games against tonight's opponent
-          const vsOpponent = allGames.filter(g => g.opponent && g.opponent.id === side.opponentId);
-          if (vsOpponent.length < 3) continue; // Need at least 3 games against them for a trend
+          const vsOpponent = allGames.filter(g => g.opponent && String(g.opponent.id) === String(side.opponentId));
+          if (vsOpponent.length < 4) continue; // Need at least 4 games against them for a trend
 
-          let bestProp = null;
-          let highestRate = -1;
+          const playerBestProps = {};
 
           props.forEach(prop => {
             let hits = 0;
             const validGames = vsOpponent.filter(g => g.stats[prop.stat] !== undefined && g.stats[prop.stat] !== '-');
-            if (validGames.length < 3) return;
+            if (validGames.length < 4) return;
 
             const results = validGames.map(g => {
               const val = parseFloat(g.stats[prop.stat]) || 0;
@@ -1318,25 +1325,48 @@ async function loadDailyParlays() {
             });
 
             const rate = hits / validGames.length;
-            if (rate > highestRate && rate >= 0.6) {
-              highestRate = rate;
-              bestProp = { ...prop, rate, hits, total: validGames.length, results };
+            if (rate >= 0.75) {
+              if (!playerBestProps[prop.stat] || rate > playerBestProps[prop.stat].rate) {
+                playerBestProps[prop.stat] = { ...prop, rate, hits, total: validGames.length, results };
+              }
             }
           });
 
-          if (bestProp) {
-            return { player: p, prop: bestProp, matchup: `vs ${side.opponentName}`, oppId: side.opponentId };
-          }
+          Object.values(playerBestProps).forEach(bestProp => {
+            sideBets.push({ player: p, prop: bestProp, matchup: `vs ${side.opponentName}`, oppId: side.opponentId });
+          });
         }
-        return null;
+        return sideBets;
       });
     });
 
     const results = await Promise.all(promises);
-    candidateBets = results.filter(r => r !== null).sort((a, b) => b.prop.rate - a.prop.rate);
+    candidateBets = results.flat(); // flatten the sideBets arrays
 
-    // Take top 3 for the parlay
-    const bestBets = candidateBets.slice(0, 3);
+    // Group into 3 categories (e.g. Points, Rebounds, Assists)
+    const primaryCategories = SPORT_CONFIG[state.sport].primaryStats.slice(0, 3);
+    const bestBets = [];
+
+    primaryCategories.forEach(stat => {
+      const betsForStat = candidateBets.filter(b => b.prop.stat === stat).sort((a, b) => b.prop.rate - a.prop.rate);
+      if (betsForStat.length) {
+        // Avoid pushing a player twice if they already have a prop in another category
+        const uniqueBet = betsForStat.find(b => !bestBets.some(existing => existing.player.id === b.player.id));
+        if (uniqueBet) {
+          bestBets.push(uniqueBet);
+        } else {
+          bestBets.push(betsForStat[0]);
+        }
+      }
+    });
+
+    // If we missed some categories, pad out to 3 columns using the best remaining props
+    if (bestBets.length < 3) {
+      const remaining = candidateBets.filter(b => !bestBets.includes(b)).sort((a, b) => b.prop.rate - a.prop.rate);
+      while (bestBets.length < 3 && remaining.length > 0) {
+        bestBets.push(remaining.shift());
+      }
+    }
 
     if (!bestBets.length) {
       container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No high-confidence historical trends found for today's matchups.</p>`;
