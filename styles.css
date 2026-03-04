@@ -368,7 +368,7 @@ main {
 }
 
 .player-info h2 {
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.3px;
 }
@@ -511,12 +511,12 @@ main {
 }
 
 .intro-icon {
-  font-size: 48px;
+  font-size: 36px;
   margin-bottom: 16px;
 }
 
 .intro-section h2 {
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 800;
   margin-bottom: 10px;
 }
@@ -612,24 +612,24 @@ main {
 .daily-parlay-container {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-top: 16px;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .parlay-card-headshot {
-  width: 100px;
+  width: 50px;
   /* <-- Change this to adjust the headshot width */
-  height: 100px;
+  height: 50px;
   /* <-- Change this to adjust the headshot height */
   border-radius: 50%;
   border: 1.5px solid var(--accent);
   background: var(--bg-surface);
   object-fit: cover;
-  margin-right: 12px;
+  margin-right: 10px;
 }
 
 .hot-player-name {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
 }

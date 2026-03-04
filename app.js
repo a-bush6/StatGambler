@@ -1391,7 +1391,7 @@ async function loadDailyParlays() {
           </div>
           <div class="parlay-footer">
             <div class="parlay-odds">Top Trend</div>
-            <div style="font-size: 11px; color: var(--text-muted);">${bet.prop.hits}/${bet.prop.total} times</div>
+            <div style="font-size:12px; color: var(--text-muted);">${bet.prop.hits}/${bet.prop.total} times</div>
           </div>
         </div>
       `;
