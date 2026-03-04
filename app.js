@@ -1297,6 +1297,7 @@ async function loadDailyParlays() {
         if (!roster || roster.length === 0) return null;
 
         let sideBets = [];
+        let sideValueBets = [];
         // Just grab the first active player on the roster who matches a trend (up to 3 tries per team)
         for (let i = 0; i < Math.min(3, roster.length); i++) {
           const p = roster[i];
@@ -1311,6 +1312,7 @@ async function loadDailyParlays() {
           if (vsOpponent.length < 4) continue; // Need at least 4 games against them for a trend
 
           const playerBestProps = {};
+          const playerValueProps = {};
 
           props.forEach(prop => {
             let hits = 0;
@@ -1325,9 +1327,20 @@ async function loadDailyParlays() {
             });
 
             const rate = hits / validGames.length;
+
+            // Standard Parlay: Maximize hit rate (safest)
             if (rate >= 0.75) {
               if (!playerBestProps[prop.stat] || rate > playerBestProps[prop.stat].rate) {
                 playerBestProps[prop.stat] = { ...prop, rate, hits, total: validGames.length, results };
+              }
+            }
+
+            // High Value Parlay: Maximize val, then rate, for any prop with decent hit rate (>=0.6)
+            if (rate >= 0.6) {
+              if (!playerValueProps[prop.stat] ||
+                prop.val > playerValueProps[prop.stat].val ||
+                (prop.val === playerValueProps[prop.stat].val && rate > playerValueProps[prop.stat].rate)) {
+                playerValueProps[prop.stat] = { ...prop, rate, hits, total: validGames.length, results };
               }
             }
           });
@@ -1335,67 +1348,100 @@ async function loadDailyParlays() {
           Object.values(playerBestProps).forEach(bestProp => {
             sideBets.push({ player: p, prop: bestProp, matchup: `vs ${side.opponentName}`, oppId: side.opponentId });
           });
+          Object.values(playerValueProps).forEach(valueProp => {
+            sideValueBets.push({ player: p, prop: valueProp, matchup: `vs ${side.opponentName}`, oppId: side.opponentId });
+          });
         }
-        return sideBets;
+        return { sideBets, sideValueBets };
       });
     });
 
     const results = await Promise.all(promises);
-    candidateBets = results.flat(); // flatten the sideBets arrays
+    candidateBets = results.map(r => r ? r.sideBets : []).flat();
+    const highValueBets = results.map(r => r ? r.sideValueBets : []).flat();
 
-    // Group into 3 categories (e.g. Points, Rebounds, Assists)
     const primaryCategories = SPORT_CONFIG[state.sport].primaryStats.slice(0, 3);
-    const bestBets = [];
 
-    primaryCategories.forEach(stat => {
-      const betsForStat = candidateBets.filter(b => b.prop.stat === stat).sort((a, b) => b.prop.rate - a.prop.rate);
-      if (betsForStat.length) {
-        // Avoid pushing a player twice if they already have a prop in another category
-        const uniqueBet = betsForStat.find(b => !bestBets.some(existing => existing.player.id === b.player.id));
-        if (uniqueBet) {
-          bestBets.push(uniqueBet);
-        } else {
-          bestBets.push(betsForStat[0]);
+    const getBestBets = (betsArray, maximizeValue = false) => {
+      const best = [];
+
+      if (maximizeValue) {
+        // High Value: Ignore categories, just get the highest possible milestones
+        const sorted = betsArray.sort((a, b) => {
+          if (b.prop.val !== a.prop.val) return b.prop.val - a.prop.val;
+          return b.prop.rate - a.prop.rate;
+        });
+
+        for (const bet of sorted) {
+          if (!best.some(existing => existing.player.id === bet.player.id)) {
+            best.push(bet);
+          }
+          if (best.length >= 3) break;
+        }
+        return best;
+      }
+
+      // Standard Parlay: Group by stat category
+      primaryCategories.forEach(stat => {
+        const betsForStat = betsArray.filter(b => b.prop.stat === stat).sort((a, b) => {
+          return b.prop.rate - a.prop.rate;
+        });
+        if (betsForStat.length) {
+          const uniqueBet = betsForStat.find(b => !best.some(existing => existing.player.id === b.player.id));
+          if (uniqueBet) {
+            best.push(uniqueBet);
+          } else {
+            best.push(betsForStat[0]);
+          }
+        }
+      });
+      if (best.length < 3) {
+        const remaining = betsArray.filter(b => !best.includes(b)).sort((a, b) => {
+          return b.prop.rate - a.prop.rate;
+        });
+        while (best.length < 3 && remaining.length > 0) {
+          best.push(remaining.shift());
         }
       }
-    });
+      return best;
+    };
 
-    // If we missed some categories, pad out to 3 columns using the best remaining props
-    if (bestBets.length < 3) {
-      const remaining = candidateBets.filter(b => !bestBets.includes(b)).sort((a, b) => b.prop.rate - a.prop.rate);
-      while (bestBets.length < 3 && remaining.length > 0) {
-        bestBets.push(remaining.shift());
-      }
-    }
+    const bestBets = getBestBets(candidateBets, false);
+    const bestValueBets = getBestBets(highValueBets, true);
 
-    if (!bestBets.length) {
-      container.innerHTML = `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No high-confidence historical trends found for today's matchups.</p>`;
-      return;
-    }
-
-    container.innerHTML = bestBets.map(bet => {
-      const pct = Math.round(bet.prop.rate * 100);
-      return `
-        <div class="parlay-card" onclick="document.getElementById('player-search').value='${bet.player.fullName || bet.player.displayName}'; document.getElementById('search-btn').click(); window.scrollTo({top:0, behavior:'smooth'});">
-          <div class="parlay-card-header">
-            <img class="parlay-card-headshot" src="${bet.player.headshot?.href || 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png'}" alt="${bet.player.displayName}">
-            <div class="parlay-card-info">
-              <div class="parlay-player-name">${bet.player.displayName}</div>
-              <div class="parlay-matchup">${bet.matchup}</div>
+    const renderBets = (betsToRender) => {
+      if (!betsToRender.length) return `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No stats found.</p>`;
+      return betsToRender.map(bet => {
+        const pct = Math.round(bet.prop.rate * 100);
+        return `
+          <div class="parlay-card" onclick="document.getElementById('player-search').value='${bet.player.fullName || bet.player.displayName}'; document.getElementById('search-btn').click(); window.scrollTo({top:0, behavior:'smooth'});">
+            <div class="parlay-card-header">
+              <img class="parlay-card-headshot" src="${bet.player.headshot?.href || 'https://a.espncdn.com/i/headshots/nba/players/full/1966.png'}" alt="${bet.player.displayName}">
+              <div class="parlay-card-info">
+                <div class="parlay-player-name">${bet.player.displayName}</div>
+                <div class="parlay-matchup">${bet.matchup}</div>
+              </div>
+              <div class="parlay-hit-rate">✓ ${pct}%</div>
             </div>
-            <div class="parlay-hit-rate">✓ ${pct}%</div>
+            <div class="parlay-prop-box">
+              <div class="parlay-prop-label">${bet.prop.label}</div>
+              <div class="parlay-prop-value">${bet.prop.val}+</div>
+            </div>
+            <div class="parlay-footer">
+              <div class="parlay-odds">Top Trend</div>
+              <div style="font-size:12px; color: var(--text-muted);">${bet.prop.hits}/${bet.prop.total} times</div>
+            </div>
           </div>
-          <div class="parlay-prop-box">
-            <div class="parlay-prop-label">${bet.prop.label}</div>
-            <div class="parlay-prop-value">${bet.prop.val}+</div>
-          </div>
-          <div class="parlay-footer">
-            <div class="parlay-odds">Top Trend</div>
-            <div style="font-size:12px; color: var(--text-muted);">${bet.prop.hits}/${bet.prop.total} times</div>
-          </div>
-        </div>
-      `;
-    }).join('');
+        `;
+      }).join('');
+    };
+
+    container.innerHTML = bestBets.length ? renderBets(bestBets) : `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No high-confidence historical trends found for today's matchups.</p>`;
+
+    const valueContainer = document.getElementById('high-value-parlay-container');
+    if (valueContainer) {
+      valueContainer.innerHTML = bestValueBets.length ? renderBets(bestValueBets) : `<p style="text-align:center;color:var(--text-muted);font-size:13px;padding:20px">No high value props found.</p>`;
+    }
 
   } catch (e) {
     console.error('Failed to load daily parlays', e);
