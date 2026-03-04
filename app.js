@@ -721,7 +721,15 @@ async function selectPlayer(player) {
 
     state.player = player;
     state.gamelog = parseGamelog(rawGamelog);
-    state.opponents = extractOpponents(state.gamelog);
+
+    // Instead of only extracting opponents from the current gamelog, fetch all league teams globally
+    const leagueTeams = await getTeams();
+    state.opponents = leagueTeams.map(t => ({
+      id: t.id,
+      name: t.displayName,
+      abbreviation: t.abbreviation,
+      logo: t.logos && t.logos.length > 0 ? t.logos[0].href : ''
+    })).sort((a, b) => a.name.localeCompare(b.name));
     state.selectedOpponent = null;
 
     if (!state.gamelog.length) {
