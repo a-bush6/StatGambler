@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2.5">
 </head>
 
 <body>
@@ -25,37 +25,39 @@
         </div>
     </header>
 
-    <main>
+    <main class="main-container">
         <!-- ─── Sport Selector ───────────────── -->
-        <section class="sport-bar">
+        <nav class="sport-nav" aria-label="Select Sport">
             <button class="sport-btn active" data-sport="basketball" data-league="nba">🏀 NBA</button>
             <button class="sport-btn" data-sport="football" data-league="nfl">🏈 NFL</button>
             <button class="sport-btn" data-sport="baseball" data-league="mlb">⚾ MLB</button>
-        </section>
+        </nav>
 
-        <!-- ─── Search Section ───────────────── -->
+        <!-- ─── Player Search & Example Pills ──── -->
         <section class="search-section">
             <div class="search-box">
-                <input type="text" id="player-search" placeholder="Search a player… (e.g. LeBron, Mahomes, Soto)"
+                <input type="text" id="player-search" placeholder="Search any player (e.g. LeBron James, Patrick Mahomes, Aaron Judge)..."
                     autocomplete="off">
                 <button id="search-btn" class="search-icon" aria-label="Search">🔍</button>
                 <div id="player-dropdown" class="autocomplete-results"></div>
             </div>
-        </section>
 
-        <!-- ─── Browse Teams ─────────────────── -->
-        <section class="browse-teams">
-            <div class="team-dropdown-wrap">
+            <!-- Browse by Team -->
+            <div class="browse-teams">
+                <label for="team-dropdown">Or browse roster:</label>
                 <select id="team-dropdown" class="team-select">
-                    <option value="">Select a Team...</option>
+                    <option value="">Select a team…</option>
                 </select>
             </div>
         </section>
 
-        <!-- ─── Team Roster (hidden until team selected) ── -->
+        <!-- ─── Active Team Roster ─────────────── -->
         <section id="roster-section" class="roster-section hidden">
-            <h3>Team Roster</h3>
-            <div id="roster-container" class="roster-grid"></div>
+            <div class="roster-header">
+                <h3>👥 Active Roster</h3>
+                <p class="section-hint">Click any player to load their complete candlestick analytics</p>
+            </div>
+            <div id="roster-container" class="roster-container"></div>
         </section>
 
         <!-- ─── Player Card (hidden until selected) ── -->
@@ -70,15 +72,19 @@
             </div>
         </section>
 
-        <!-- ─── Opponent Selector ────────────── -->
+        <!-- ─── Opponent Matchup Selector ────────────── -->
         <section id="opponent-section" class="opponent-section hidden">
-            <h3>Select Opponent</h3>
-            <p class="section-hint">Pick a team to see how this player performs against them</p>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <h3 style="margin-bottom:2px;font-size:15px;">🛡️ Filter by Opponent Matchup</h3>
+                    <p class="section-hint" style="margin-bottom:0;font-size:12px;">Click any team icon below to see this player's previous stats vs that opponent</p>
+                </div>
+            </div>
             <div id="opponent-grid" class="opponent-grid"></div>
             <div id="selected-opponent" class="selected-opponent hidden">
                 <span id="opp-logo-wrap"></span>
                 <span id="opp-name-text"></span>
-                <button id="clear-opponent" class="clear-opp-btn">✕</button>
+                <button id="clear-opponent" class="clear-opp-btn" title="Clear opponent filter">✕ Clear Filter</button>
             </div>
         </section>
 
@@ -90,41 +96,45 @@
                 charts.</p>
             <div class="example-row">
                 <span class="example-pill" data-query="LeBron James">🏀 LeBron</span>
-                <span class="example-pill" data-query="Patrick Mahomes">🏈 Mahomes</span>
-                <span class="example-pill" data-query="Juan Soto">⚾ Soto</span>
+                <span class="example-pill" data-query="Patrick Mahomes">🏈 Mahomes (QB)</span>
+                <span class="example-pill" data-query="Justin Jefferson">🏈 Jefferson (WR)</span>
+                <span class="example-pill" data-query="Derrick Henry">🏈 Henry (RB)</span>
+                <span class="example-pill" data-query="T.J. Watt">🏈 Watt (DEF)</span>
+                <span class="example-pill" data-query="Harrison Butker">🏈 Butker (K)</span>
+                <span class="example-pill" data-query="Aaron Judge">⚾ Judge (Hitter)</span>
+                <span class="example-pill" data-query="Paul Skenes">⚾ Skenes (Pitcher)</span>
+                <span class="example-pill" data-query="Shohei Ohtani">⚾ Ohtani</span>
             </div>
 
-            <!-- ─── Daily Parlay ──────────────────── -->
-            <div id="daily-parlay-section" class="daily-parlay-section">
-                <h3>🔥 AI Parlay Builder (Today's Matchups)</h3>
-                <p style="color: var(--text-muted); font-size: 10px; margin-bottom: 12px;">
-                    We scanned today's schedule to find the top 3 player milestones based on their historical hit rates
-                    against their scheduled opponents.
-                </p>
-                <div id="daily-parlay-container" class="daily-parlay-container"></div>
-            </div>
+            <!-- ─── Daily Parlays & Hot Props (before search) ── -->
+            <div id="presearch-container" class="presearch-container">
+                <section id="daily-parlays-section" class="daily-parlays-section">
+                    <div class="parlay-header">
+                        <div class="parlay-title-wrap">
+                            <h3>🔥 AI Daily Parlay Builder</h3>
+                            <span class="parlay-badge">80%+ HIT RATE</span>
+                        </div>
+                        <div class="parlay-header-actions">
+                            <span class="parlay-criteria-pill">🎯 L10 ≥80% · Odds -250 to -110</span>
+                            <button id="odds-api-settings-btn" class="odds-settings-btn" title="Configure Prop Lines API (The Odds API)">⚙️ API Settings</button>
+                        </div>
+                        <p class="parlay-subtitle">Real sportsbook player prop lines verified with 80%+ hit rates over the past 10 games.</p>
+                    </div>
+                    <div id="daily-parlay-container" class="daily-parlay-container"></div>
+                </section>
 
-            <!-- ─── High Value Parlay ──────────────────── -->
-            <div id="high-value-parlay-section" class="daily-parlay-section" style="margin-top: 24px;">
-                <h3>🚀 +300 High Value Parlay</h3>
-                <p style="color: var(--text-muted); font-size: 10px; margin-bottom: 12px;">
-                    These milestones seek a higher payout by selecting slightly riskier props that still maintain strong
-                    historical hit rates.
-                </p>
-                <div id="high-value-parlay-container" class="daily-parlay-container"></div>
-            </div>
-
-
-
-            <!-- ─── Hot Streaks ──────────────────── -->
-            <div id="hot-props-section" class="hot-props-section">
-                <h3>🔥 Hot Streaks (Last 10 Games)</h3>
-                <div id="hot-props-container" class="hot-props-container"></div>
+                <section id="hot-props-section" class="hot-props-section">
+                    <div class="hot-props-header">
+                        <h3>⚡ Today's Hot Props</h3>
+                        <p class="hot-props-subtitle">High-probability trends based on recent game streaks</p>
+                    </div>
+                    <div id="hot-props-container" class="hot-props-container"></div>
+                </section>
             </div>
         </div>
 
         <!-- ─── Loading Overlay ──────────────── -->
-        <div id="loading-overlay" class="loading-overlay">
+        <div id="loading-overlay" class="loading-overlay hidden">
             <div class="spinner"></div>
             <div class="loading-text">Loading player data…</div>
         </div>
@@ -133,12 +143,12 @@
         <section id="results-section" class="results-section hidden">
             <!-- Averages Summary Bar -->
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
                 <div id="averages-bar" class="averages-bar" style="flex: 1; margin-bottom: 0;"></div>
 
                 <div id="game-count-container" style="margin-left: 16px;">
                     <select id="game-count-dropdown" class="team-select"
-                        style="min-width: 120px; padding: 6px 14px; font-size: 12px;">
+                        style="min-width: 140px; padding: 6px 14px; font-size: 12px;">
                         <option value="5">Last 5 Games</option>
                         <option value="10">Last 10 Games</option>
                         <option value="15">Last 15 Games</option>
@@ -155,10 +165,38 @@
         </section>
     </main>
 
+    <!-- ─── API Settings Modal ───────────── -->
+    <div id="api-settings-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>⚙️ Player Prop Lines API Settings</h3>
+                <button id="close-api-modal-btn" class="modal-close" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    StatGambler connects to <strong>The Odds API</strong> (or automated consensus sportsbooks) to source live player prop lines.
+                </p>
+                <div class="form-group" style="margin-bottom:14px;">
+                    <label for="the-odds-api-key" style="font-size:12px;font-weight:700;display:block;margin-bottom:6px;color:var(--text-primary);">
+                        The Odds API Key (Optional)
+                    </label>
+                    <input type="text" id="the-odds-api-key" class="text-input" placeholder="Paste your The Odds API key here..." style="width:100%;padding:10px 12px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;" />
+                    <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:6px;line-height:1.4;">
+                        Get an API key at <a href="https://the-odds-api.com" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">the-odds-api.com</a>. If left empty, StatGambler uses the built-in real-time sportsbook lines engine.
+                    </span>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+                    <button id="clear-api-key-btn" class="modal-btn secondary">Reset Default</button>
+                    <button id="save-api-key-btn" class="modal-btn primary">Save & Reload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ─── Error Toast ────────────────────── -->
     <div id="error-toast" class="error-toast"></div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2.6"></script>
 </body>
 
 </html>
