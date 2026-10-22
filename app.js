@@ -421,7 +421,7 @@ async function getGamelog(playerId, fetchOpponentId = null) {
   const seasonYears = Array.from({ length: yearsToFetch }, (_, idx) => startSeason - idx);
 
   const fetchSeason = async (seasonYear) => {
-    const url = `${ESPN_SITE}/${state.sport}/${cfg.league}/athletes/${playerId}/gamelog?season=${seasonYear}&seasontype=2`;
+    const url = `${ESPN_SITE}/${state.sport}/${cfg.league}/athletes/${playerId}/gamelog?season=${seasonYear}`;
     try {
       const res = await fetch(url);
       if (!res.ok) return null;
