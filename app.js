@@ -8,6 +8,27 @@
 const ESPN_CORE = 'https://sports.core.api.espn.com/v2/sports';
 const ESPN_SITE = 'https://site.web.api.espn.com/apis/common/v3/sports';
 
+// ─── Dynamic Season Year ────────────────
+// ESPN uses the ENDING year for seasons that span two calendar years.
+// NBA: season starts Oct, ends June next year → Oct 2026 = season 2027
+// NFL: season starts Sep, ends Feb next year → Sep 2026 = season 2027  
+// MLB: season runs Apr-Oct same year → 2026 = season 2026
+function getCurrentESPNSeason(sport) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed (0=Jan, 9=Oct)
+  if (sport === 'basketball') {
+    // NBA: if July or later, the upcoming season is year+1
+    return month >= 6 ? year + 1 : year;
+  } else if (sport === 'football') {
+    // NFL: if March or later, the upcoming season is year+1 (draft/preseason starts)
+    return month >= 2 ? year + 1 : year;
+  } else {
+    // MLB: season runs within the calendar year
+    return year;
+  }
+}
+
 const SPORT_CONFIG = {
   basketball: {
     league: 'nba',
@@ -15,7 +36,7 @@ const SPORT_CONFIG = {
     statKeys: ['points', 'totalRebounds', 'assists', 'threePointFieldGoalsMade', 'steals', 'blocks', 'turnovers', 'fieldGoalPct', 'threePointPct', 'freeThrowPct', 'minutes'],
     primaryStats: ['PTS', 'REB', 'AST', '3PM'],
     chartStats: ['PTS', 'REB', 'AST', '3PM', 'STL'],
-    season: 2026,
+    get season() { return getCurrentESPNSeason('basketball'); },
   },
   football: {
     league: 'nfl',
@@ -23,7 +44,7 @@ const SPORT_CONFIG = {
     statKeys: ['passingYards', 'passingTouchdowns', 'interceptions', 'completions', 'passingAttempts', 'completionPct', 'rushingYards', 'rushingTouchdowns', 'QBRating'],
     primaryStats: ['PASS YDS', 'PASS TD', 'RUSH YDS', 'RUSH TD'],
     chartStats: ['PASS YDS', 'PASS TD', 'RUSH YDS', 'RUSH TD'],
-    season: 2026,
+    get season() { return getCurrentESPNSeason('football'); },
   },
   baseball: {
     league: 'mlb',
@@ -31,7 +52,7 @@ const SPORT_CONFIG = {
     statKeys: ['hits', 'homeRuns', 'RBIs', 'runs', 'walks', 'strikeouts', 'avg', 'onBasePct', 'slugAvg', 'atBats', 'stolenBases', 'ops'],
     primaryStats: ['H', 'HR', 'RBI', 'AVG'],
     chartStats: ['H', 'HR', 'RBI', 'R'],
-    season: 2026,
+    get season() { return getCurrentESPNSeason('baseball'); },
   }
 };
 
@@ -393,8 +414,9 @@ async function getPlayerDetails(playerId) {
 async function getGamelog(playerId, fetchOpponentId = null) {
   const cfg = SPORT_CONFIG[state.sport];
   const currentYear = new Date().getFullYear();
-  // Ensure we start from at least current calendar year (or configured season) to capture recent games
-  const startSeason = Math.max(cfg.season || currentYear, currentYear);
+  // Always start from currentYear+1 to capture seasons that span calendar years (NBA/NFL)
+  // ESPN season 2027 = the 2026-27 NBA/NFL season
+  const startSeason = Math.max(cfg.season || currentYear, currentYear + 1);
   const yearsToFetch = 20;
   const seasonYears = Array.from({ length: yearsToFetch }, (_, idx) => startSeason - idx);
 
